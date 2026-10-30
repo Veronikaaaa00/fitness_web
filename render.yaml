@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: fitness-pocketbase
+    runtime: docker
+    # Free-диск эфемерный: после сна/рестарта все записи пропадают.
+    # Starter + disk сохраняют pb_data между перезапусками.
+    plan: starter
+    healthCheckPath: /api/health
+    disk:
+      name: pb-data
+      mountPath: /pb/pb_data
+      sizeGB: 1
+    envVars:
+      - key: PB_ADMIN_EMAIL
+        value: admin@gmail.com
+      - key: PB_ADMIN_PASSWORD
+        value: admin123
