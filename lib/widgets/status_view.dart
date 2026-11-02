@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../state/load_status.dart';
 
-class StatusView extends StatelessWidget {
+/// Общий индикатор состояний списка.
+/// Состояние loading держится минимум ~450 мс, чтобы спиннер было видно на защите/скринах.
+class StatusView extends StatefulWidget {
   const StatusView({
     super.key,
     required this.status,
@@ -19,10 +23,84 @@ class StatusView extends StatelessWidget {
   final String? emptySubtitle;
 
   @override
+  State<StatusView> createState() => _StatusViewState();
+}
+
+class _StatusViewState extends State<StatusView> {
+  static const _minLoading = Duration(milliseconds: 450);
+
+  late LoadStatus _shown;
+  DateTime? _loadingStarted;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _shown = widget.status;
+    if (widget.status == LoadStatus.loading || widget.status == LoadStatus.idle) {
+      _loadingStarted = DateTime.now();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant StatusView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _applyStatus(widget.status);
+  }
+
+  void _applyStatus(LoadStatus next) {
+    if (next == LoadStatus.loading || next == LoadStatus.idle) {
+      _timer?.cancel();
+      _loadingStarted ??= DateTime.now();
+      if (_shown != LoadStatus.loading) {
+        setState(() => _shown = LoadStatus.loading);
+      }
+      return;
+    }
+
+    if (_shown == LoadStatus.loading) {
+      final started = _loadingStarted ?? DateTime.now();
+      final elapsed = DateTime.now().difference(started);
+      _loadingStarted = null;
+      if (elapsed < _minLoading) {
+        _timer?.cancel();
+        _timer = Timer(_minLoading - elapsed, () {
+          if (!mounted) return;
+          setState(() => _shown = next);
+        });
+        return;
+      }
+    }
+
+    _timer?.cancel();
+    if (_shown != next) {
+      setState(() => _shown = next);
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return switch (status) {
-      LoadStatus.loading || LoadStatus.idle => const Center(
-          child: CircularProgressIndicator(),
+    return switch (_shown) {
+      LoadStatus.loading || LoadStatus.idle => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                'Загрузка…',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
         ),
       LoadStatus.empty => Center(
           child: Padding(
@@ -37,14 +115,14 @@ class StatusView extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  emptyTitle,
+                  widget.emptyTitle,
                   style: Theme.of(context).textTheme.titleMedium,
                   textAlign: TextAlign.center,
                 ),
-                if (emptySubtitle != null) ...[
+                if (widget.emptySubtitle != null) ...[
                   const SizedBox(height: 6),
                   Text(
-                    emptySubtitle!,
+                    widget.emptySubtitle!,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -68,13 +146,13 @@ class StatusView extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  message ?? 'Не удалось загрузить данные',
+                  widget.message ?? 'Не удалось загрузить данные',
                   textAlign: TextAlign.center,
                 ),
-                if (onRetry != null) ...[
+                if (widget.onRetry != null) ...[
                   const SizedBox(height: 16),
                   FilledButton.tonal(
-                    onPressed: onRetry,
+                    onPressed: widget.onRetry,
                     child: const Text('Повторить'),
                   ),
                 ],
